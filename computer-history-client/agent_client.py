@@ -9,10 +9,12 @@ to submit prompts and handle responses.
 import os
 import logging
 from typing import List, Dict, Any
+
 from dotenv import load_dotenv
 
 # Import Azure Identity and OpenAI client libraries
-
+from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+from openai import OpenAI
 
 
 
@@ -26,11 +28,20 @@ class AgentClient:
     
     def __init__(self):
         """Initialize the agent client with authentication and endpoint."""
-        self.agent_endpoint = os.getenv("AGENT_ENDPOINT").replace("/v1/responses", "")
+        self.agent_endpoint = os.getenv("AGENT_ENDPOINT").replace("/responses", "").rstrip("/")
         if not self.agent_endpoint:
             raise ValueError("AGENT_ENDPOINT not found in environment variables")
         
         # Create OpenAI client authenticated with Azure credentials 
+        self.client = OpenAI(
+            api_key=get_bearer_token_provider(
+                DefaultAzureCredential(), 
+                "https://ai.azure.com/.default"
+            ),
+            base_url=self.agent_endpoint,
+            default_query={"api-version": "2025-11-15-preview"}
+        )
+        
 
 
 
@@ -62,6 +73,12 @@ class AgentClient:
 
 
             # Send prompt with full conversation history and get response
+            response = self.client.responses.create(
+            input=self.conversation_history
+            )
+            assistant_message = response.output_text
+            
+            
 
 
 
@@ -90,8 +107,10 @@ class AgentClient:
             return assistant_message
             
         except Exception as e:
-            logger.exception("Error communicating with agent")
-            return "An internal error occurred while communicating with the agent."
+            print("ERROR:", str(e))
+            raise
+            #logger.exception("Error communicating with agent")
+            #return "An internal error occurred while communicating with the agent."
     
     def reset_conversation(self):
         """Clear the conversation history."""
